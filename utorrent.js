@@ -14,6 +14,13 @@ const whois = require('whois')
 
 const childProcess = require('child_process')
 
+function prependZero(number) {
+    if (number < 9)
+        return "0" + number;
+    else
+        return number;
+}
+
 log = console.log.bind(console)
 
     /*, "TORRENT_HASH": 0
@@ -51,17 +58,18 @@ utorrent = {
         user: 'cpu1',
         pass: 'pass'
     },
+    download_url: 'http://127.0.0.1:8082/',
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
     PortData: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\port',
     updateRateSec: 45 ,
     clearFirewallInterval: 3600,
-    max_firewall_rules: 4000,
+    max_firewall_rules: 5000,
     minupload: 40, //KB/sec
-	max_peers: 500,
+	max_peers: 1200,
 	min_torrent_size: 10, //MB
 	max_torrent_size: 15000, //MB
-	max_active_peers: 15,
-    max_inactive_time: 120, //minutes,
+	max_active_peers: 100,
+    max_inactive_time: 360, //minutes,
 	tor_min_date: 30, //minutes
     blocked_ips: [],
     firewall_ips: [],
@@ -71,6 +79,9 @@ utorrent = {
     WalletBalance: 0,
     BTTPeers: 0,
     BalanceCoefficient: 0.0,
+    StartBalance:0,
+    StartEarning:0,
+    StartTime:0,
     torrentsInactive: [],
     init: async function() {
         var $, token_html
@@ -89,6 +100,8 @@ utorrent = {
         this.GUIPort = await this.readport()
         log ('GUI Port ',this.GUIPort)
 
+        this.StartTime = new Date
+
         return 1
     },
     getWalletData: async function (){
@@ -98,13 +111,42 @@ utorrent = {
         })))
         this.WalletBalance = status['balance']/1000000
         this.BTTPeers = status['peers']
+        if (this.StartBalance == 0){
+            this.StartBalance = this.WalletBalance
+        }
+    },
+    get_download_torrents: async function() {
+        var $,data,i
+
+        data = JSON.parse((await request({   
+            uri: this.download_url+'api/v2/sync/maindata'
+            })))
+        for (var index in  data ['torrents']){
+            var torrent_size = data ['torrents'][index]['size']
+            if (torrent_size<10*1024*1024){
+                
+            }
+        }
+        
+        //});
+       // for (i=0;i<data['torrents'].length;i++){
+        //    log (data['torrents']
+            //var torrent_size = data['torrents'][i]['size']/1024/1024/1024
+            //var torrent_name = 
+            //log (,torrent_size,'GB')
+        
+        
     },
     getCoeficient: async function(){
         var $,status
         status = JSON.parse((await request({   
             uri: 'http://127.0.0.1:'+this.GUIPort+'/api/revenue/total'
         })))
-        this.BalanceCoefficient = (this.WalletBalance*1000000)/status['total_earning']
+        status['total_earning'] = status['total_earning']/1000000
+        if (this.StartEarning == 0){
+            this.StartEarning = status['total_earning']
+        }
+        this.BalanceCoefficient = (this.WalletBalance-this.StartBalance)/(status['total_earning']-this.StartEarning)
     },
     call: async function({api = '', params, method = 'GET'} = {}) {
         return JSON.parse((await request({
@@ -118,6 +160,7 @@ utorrent = {
             jar: this.cookies
         })))
     },
+
     get_torrents: async function() {
         var result,i,j,len,finded,tor_name,tor_seeds,tor_peers,tor_size,tor_active_peers,tor_upload_speed,tor_status
         this.torrents = []
@@ -274,8 +317,27 @@ utorrent = {
         }))
         return 1
 	},
+    get_peer_country: async function(peer) {
+        var result = await whois.lookup(peer[1], function(err, data) {
+            if (data != undefined){
+                var countrypos = data.indexOf('country:    ')
+                var countrypeer = data.substring((countrypos+16),(countrypos+18)).trim()
+
+                if (countrypeer.length>1){
+
+                    return countrypeer
+                } else {
+                    return ''
+                }
+            } else {
+                return ''
+            }
+            
+        })
+        return result
+    },
     get_peers: async function(hash) {
-        var i, len, ref, resp, results, peer,  peercountrycallback, resp1
+        var i, len, ref, resp, results, peer, resp1, peer_country
         resp = (await this.call({
             params: {
                 action: 'getpeers',
@@ -288,6 +350,9 @@ utorrent = {
         for (i = 0, len = ref.length; i < len; i++) {
 
             peer = ref[i]
+
+            //peer_country = await this.get_peer_country(peer)
+           // log (peer_country)
 
             results.push({
                 ip: peer[1],
@@ -334,6 +399,11 @@ utorrent = {
 
         var datetime = new Date
         log ('['+colors.yellow(datetime.getHours()+':'+datetime.getMinutes()+':'+datetime.getSeconds())+'] Refreshing...')
+        var fromStartTime = Math.floor((datetime-this.StartTime)/1000)
+        //log (fromStartTime)
+        log ('from start [',colors.yellow(prependZero(Math.floor(fromStartTime/3600))+':'+prependZero(Math.floor((fromStartTime/60)%60))+':'+prependZero(fromStartTime%60)),']')
+
+        await this.get_download_torrents()
 
         await this.getWalletData()
         log ('Your balance:',colors.green(this.WalletBalance))
@@ -341,6 +411,7 @@ utorrent = {
 
         await this.getCoeficient()
         log ('Balance Ratio:',colors.green(Number( Math.floor(this.BalanceCoefficient*100)/100) ))
+        log ('You get: ',colors.green(this.WalletBalance-this.StartBalance))
 
         await this.get_torrents()
 
