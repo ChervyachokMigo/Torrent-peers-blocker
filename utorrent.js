@@ -2,7 +2,7 @@
 
 fs = require('fs').promises
 
-https = require('https');
+colors = require('colors');
 
 cheerio = require('cheerio')
 
@@ -48,14 +48,11 @@ log = console.log.bind(console)
 utorrent = {
     root_url: 'http://127.0.0.1:8081/gui/' ,
     auth: {
-        user: 'user',
+        user: 'cpu1',
         pass: 'pass'
     },
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
     PortData: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\port',
-    GUIPort: 0,
-    WalletBalance: 0,
-    BTTPeers: 0,
     updateRateSec: 45 ,
     clearFirewallInterval: 3600,
     max_firewall_rules: 4000,
@@ -70,6 +67,10 @@ utorrent = {
     firewall_ips: [],
     logging: true,
     FirewallClearTimer: 0,
+    GUIPort: 0,
+    WalletBalance: 0,
+    BTTPeers: 0,
+    BalanceCoefficient: 0.0,
     torrentsInactive: [],
     init: async function() {
         var $, token_html
@@ -97,6 +98,13 @@ utorrent = {
         })))
         this.WalletBalance = status['balance']/1000000
         this.BTTPeers = status['peers']
+    },
+    getCoeficient: async function(){
+        var $,status
+        status = JSON.parse((await request({   
+            uri: 'http://127.0.0.1:'+this.GUIPort+'/api/revenue/total'
+        })))
+        this.BalanceCoefficient = (this.WalletBalance*1000000)/status['total_earning']
     },
     call: async function({api = '', params, method = 'GET'} = {}) {
         return JSON.parse((await request({
@@ -201,7 +209,7 @@ utorrent = {
             }
 
 	    }
-       log ('Torrents:','active:',this.torrents.length,', inactive:',this.torrentsInactive.length)
+       log ('Torrents',colors.green('active: '+this.torrents.length),',',colors.red('inactive:',this.torrentsInactive.length))
 
         return this.hashes = this.torrents.map(function(x) {
 	            return x[0]
@@ -304,7 +312,7 @@ utorrent = {
             hash = ref[i]
             peers.append((await this.get_peers(hash)))
         }
-        log ('Total peers:',peers.length)
+        log ('Total peers:',colors.green(peers.length))
         return peers.unique('ip').sortBy('client')
     },
     clear_firewall: async function(){
@@ -325,11 +333,14 @@ utorrent = {
         var peers, peers2block,i,resultIn,resultOut,firewallOut,firewall_ip,isFoundIp,blocked_ip_counter,resultDelete
 
         var datetime = new Date
-        log ('[',datetime.getHours(),':',datetime.getMinutes(),':',datetime.getSeconds(),'] Refreshing...')
+        log ('['+colors.yellow(datetime.getHours()+':'+datetime.getMinutes()+':'+datetime.getSeconds())+'] Refreshing...')
 
         await this.getWalletData()
-        log ('Your balance:',this.WalletBalance)
-        log ('BTT Peers:',this.BTTPeers)
+        log ('Your balance:',colors.green(this.WalletBalance))
+        log ('BTT Peers:',colors.green(this.BTTPeers))
+
+        await this.getCoeficient()
+        log ('Balance Ratio:',colors.green(Number( Math.floor(this.BalanceCoefficient*100)/100) ))
 
         await this.get_torrents()
 
@@ -405,8 +416,10 @@ utorrent = {
 
         
         if (this.logging) {
-            log ('Blocked (Now/Need/Firewall)', blocked_ip_counter, '/',peers2block.length,'/',this.firewall_ips.length/2)
+            log ('Blocked (Now/Need/Firewall):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(this.firewall_ips.length) )
         }
+
+        log ('- - -\r')
 
         return 1
 
