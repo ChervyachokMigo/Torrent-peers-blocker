@@ -15,7 +15,7 @@ const whois = require('whois')
 const childProcess = require('child_process')
 
 function prependZero(number) {
-    if (number < 9)
+    if (number <= 9)
         return "0" + number;
     else
         return number;
@@ -23,53 +23,26 @@ function prependZero(number) {
 
 log = console.log.bind(console)
 
-    /*, "TORRENT_HASH": 0
-    , "TORRENT_STATUS": 1
-    , "TORRENT_NAME": 2
-    , "TORRENT_SIZE": 3
-    , "TORRENT_PROGRESS": 4
-    , "TORRENT_DOWNLOADED": 5
-    , "TORRENT_UPLOADED": 6
-    , "TORRENT_RATIO": 7
-    , "TORRENT_UPSPEED": 8
-    , "TORRENT_DOWNSPEED": 9
-    , "TORRENT_ETA": 10
-    , "TORRENT_LABEL": 11
-    , "TORRENT_PEERS_CONNECTED": 12
-    , "TORRENT_PEERS_SWARM": 13
-    , "TORRENT_SEEDS_CONNECTED": 14
-    , "TORRENT_SEEDS_SWARM": 15
-    , "TORRENT_AVAILABILITY": 16
-    , "TORRENT_QUEUE_POSITION": 17
-    , "TORRENT_REMAINING": 18
-    , "TORRENT_DOWNLOAD_URL": 19
-    , "TORRENT_RSS_FEED_URL": 20
-    , "TORRENT_STATUS_MESSAGE": 21
-    , "TORRENT_STREAM_ID": 22
-    , "TORRENT_DATE_ADDED": 23
-    , "TORRENT_DATE_COMPLETED": 24
-    , "TORRENT_APP_UPDATE_URL": 25
-    , "TORRENT_SAVE_PATH": 26*/
-
+var global_peers_country = new Array();
 
 utorrent = {
     root_url: 'http://127.0.0.1:8081/gui/' ,
     auth: {
-        user: 'cpu1',
-        pass: 'pass'
+        user: '',
+        pass: ''
     },
     download_url: 'http://127.0.0.1:8082/',
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
     PortData: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\port',
-    updateRateSec: 45 ,
+    updateRateSec: 15 ,
     clearFirewallInterval: 3600,
-    max_firewall_rules: 5000,
+    max_firewall_rules: 2000,
     minupload: 40, //KB/sec
-	max_peers: 1200,
-	min_torrent_size: 10, //MB
+	max_peers: 1200000,
+	min_torrent_size: -1, //MB
 	max_torrent_size: 15000, //MB
 	max_active_peers: 100,
-    max_inactive_time: 360, //minutes,
+    max_inactive_time: 36000, //minutes,
 	tor_min_date: 30, //minutes
     blocked_ips: [],
     firewall_ips: [],
@@ -85,6 +58,14 @@ utorrent = {
     torrentsInactive: [],
     init: async function() {
         var $, token_html
+        log ('[OPTIONS]')
+        log ('Refresh rate',colors.yellow(this.updateRateSec,'sec'))
+        log ('Max Firewall rules',colors.yellow(this.max_firewall_rules))
+        log ('Max peers in torrent',colors.yellow(this.max_peers))
+        log ('Min torrent size',colors.yellow(this.min_torrent_size),'MB')
+        log ('Max torrent size',colors.yellow(this.max_torrent_size),'MB')
+        log ('Inactive time to delete torrent',colors.yellow(this.max_inactive_time),'min')
+        log ('- - -')
         log('Start...')
 
         this.cookies = request.jar()
@@ -98,10 +79,10 @@ utorrent = {
         this.token = $('div').text()
         
         this.GUIPort = await this.readport()
-        log ('GUI Port ',this.GUIPort)
+        //log ('GUI Port ',this.GUIPort)
 
         this.StartTime = new Date
-
+        log ('- - -')
         return 1
     },
     getWalletData: async function (){
@@ -162,6 +143,33 @@ utorrent = {
     },
 
     get_torrents: async function() {
+        /*, "TORRENT_HASH": 0
+        , "TORRENT_STATUS": 1
+        , "TORRENT_NAME": 2
+        , "TORRENT_SIZE": 3
+        , "TORRENT_PROGRESS": 4
+        , "TORRENT_DOWNLOADED": 5
+        , "TORRENT_UPLOADED": 6
+        , "TORRENT_RATIO": 7
+        , "TORRENT_UPSPEED": 8
+        , "TORRENT_DOWNSPEED": 9
+        , "TORRENT_ETA": 10
+        , "TORRENT_LABEL": 11
+        , "TORRENT_PEERS_CONNECTED": 12
+        , "TORRENT_PEERS_SWARM": 13
+        , "TORRENT_SEEDS_CONNECTED": 14
+        , "TORRENT_SEEDS_SWARM": 15
+        , "TORRENT_AVAILABILITY": 16
+        , "TORRENT_QUEUE_POSITION": 17
+        , "TORRENT_REMAINING": 18
+        , "TORRENT_DOWNLOAD_URL": 19
+        , "TORRENT_RSS_FEED_URL": 20
+        , "TORRENT_STATUS_MESSAGE": 21
+        , "TORRENT_STREAM_ID": 22
+        , "TORRENT_DATE_ADDED": 23
+        , "TORRENT_DATE_COMPLETED": 24
+        , "TORRENT_APP_UPDATE_URL": 25
+        , "TORRENT_SAVE_PATH": 26*/
         var result,i,j,len,finded,tor_name,tor_seeds,tor_peers,tor_size,tor_active_peers,tor_upload_speed,tor_status
         this.torrents = []
         result = (await this.call({
@@ -318,23 +326,30 @@ utorrent = {
         return 1
 	},
     get_peer_country: async function(peer) {
-        var result = await whois.lookup(peer[1], function(err, data) {
-            if (data != undefined){
-                var countrypos = data.indexOf('country:    ')
-                var countrypeer = data.substring((countrypos+16),(countrypos+18)).trim()
+        var data = ''
+        var res_fun = function(err, data) {
+            if (data != undefined && err == null){
+                data = data.replaceAll(' ','')
+                var countrypos = data.indexOf('country:')
 
-                if (countrypeer.length>1){
-
-                    return countrypeer
-                } else {
-                    return ''
+                var countrypeer = data.substring((countrypos+8),(countrypos+10)).trim()
+                if (countrypeer.match(/[A-Z]/g) && countrypos != -1){
+                    //log (peer[1],':',countrypeer,":",countrypos,':',data.substring(countrypos,countrypos+15))
+                   //global_peers_country.push([peer[1],countrypeer])
+                   data = [peer[1],countrypeer]
+                   return data
                 }
+
             } else {
-                return ''
-            }
-            
-        })
+                log (err)
+            }       
+            return 0
+        }
+        var result = await whois.lookup(peer[1],await res_fun)
+
+        log (res_fun.data)
         return result
+        /*,  await */
     },
     get_peers: async function(hash) {
         var i, len, ref, resp, results, peer, resp1, peer_country
@@ -351,8 +366,11 @@ utorrent = {
 
             peer = ref[i]
 
+
+
             //peer_country = await this.get_peer_country(peer)
-           // log (peer_country)
+            //log (peer_country)
+           
 
             results.push({
                 ip: peer[1],
@@ -367,6 +385,8 @@ utorrent = {
             })
         }
        
+        //log (global_peers_country)
+
         return results
     },
     get_all_peers: async function() {
@@ -378,6 +398,7 @@ utorrent = {
             peers.append((await this.get_peers(hash)))
         }
         log ('Total peers:',colors.green(peers.length))
+        log ('BTT Peers:',colors.green(this.BTTPeers))
         return peers.unique('ip').sortBy('client')
     },
     clear_firewall: async function(){
@@ -398,20 +419,20 @@ utorrent = {
         var peers, peers2block,i,resultIn,resultOut,firewallOut,firewall_ip,isFoundIp,blocked_ip_counter,resultDelete
 
         var datetime = new Date
-        log ('['+colors.yellow(datetime.getHours()+':'+datetime.getMinutes()+':'+datetime.getSeconds())+'] Refreshing...')
+        log ('['+colors.yellow( prependZero(datetime.getHours())+':'+prependZero(datetime.getMinutes())+':'+prependZero(datetime.getSeconds()) )+'] Refreshing...')
         var fromStartTime = Math.floor((datetime-this.StartTime)/1000)
-        //log (fromStartTime)
         log ('from start [',colors.yellow(prependZero(Math.floor(fromStartTime/3600))+':'+prependZero(Math.floor((fromStartTime/60)%60))+':'+prependZero(fromStartTime%60)),']')
 
-        await this.get_download_torrents()
+       // await this.get_download_torrents()
 
         await this.getWalletData()
-        log ('Your balance:',colors.green(this.WalletBalance))
-        log ('BTT Peers:',colors.green(this.BTTPeers))
-
         await this.getCoeficient()
+
+        var BalanceChange = Math.floor((this.WalletBalance-this.StartBalance)*1000000)/1000000
+
+        log ('Your balance:',this.StartBalance,colors.green('+'+BalanceChange),'('+this.WalletBalance+')')
+        
         log ('Balance Ratio:',colors.green(Number( Math.floor(this.BalanceCoefficient*100)/100) ))
-        log ('You get: ',colors.green(this.WalletBalance-this.StartBalance))
 
         await this.get_torrents()
 
@@ -487,7 +508,7 @@ utorrent = {
 
         
         if (this.logging) {
-            log ('Blocked (Now/Need/Firewall):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(this.firewall_ips.length) )
+            log ('Blocked (Last/Need/Total):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(this.firewall_ips.length) )
         }
 
         log ('- - -\r')
