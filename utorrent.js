@@ -34,9 +34,9 @@ utorrent = {
     download_url: 'http://127.0.0.1:8082/',
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
     PortData: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\port',
-    updateRateSec: 15 ,
+    updateRateSec: 45 ,
     clearFirewallInterval: 3600,
-    max_firewall_rules: 2000,
+    max_firewall_rules: 500,
     minupload: 40, //KB/sec
 	max_peers: 1200000,
 	min_torrent_size: -1, //MB
@@ -73,6 +73,8 @@ utorrent = {
             uri: this.root_url + 'token.html',
             auth: this.auth,
             jar: this.cookies
+        }).on('error',function(err){
+            log(err)
         }))
 
         $ = cheerio.load(token_html)
@@ -86,10 +88,14 @@ utorrent = {
         return 1
     },
     getWalletData: async function (){
-        var $,status
-        status = JSON.parse((await request({   
+        var $,status,connect_request
+        connect_request = (await request({   
             uri: 'http://127.0.0.1:'+this.GUIPort+'/api/status'
-        })))
+        }).on('error',function(err){
+            log(err)
+        }))
+
+        status = JSON.parse(connect_request)
         this.WalletBalance = status['balance']/1000000
         this.BTTPeers = status['peers']
         if (this.StartBalance == 0){
@@ -99,9 +105,11 @@ utorrent = {
     get_download_torrents: async function() {
         var $,data,i
 
-        data = JSON.parse((await request({   
+        data = JSON.parse(await request({   
             uri: this.download_url+'api/v2/sync/maindata'
-            })))
+        }).on('error',function(err){
+            log(err)
+        }))
         for (var index in  data ['torrents']){
             var torrent_size = data ['torrents'][index]['size']
             if (torrent_size<10*1024*1024){
@@ -120,9 +128,11 @@ utorrent = {
     },
     getCoeficient: async function(){
         var $,status
-        status = JSON.parse((await request({   
+        status = JSON.parse(await request({   
             uri: 'http://127.0.0.1:'+this.GUIPort+'/api/revenue/total'
-        })))
+        }).on('error',function(err){
+            log(err)
+        }))
         status['total_earning'] = status['total_earning']/1000000
         if (this.StartEarning == 0){
             this.StartEarning = status['total_earning']
@@ -130,7 +140,7 @@ utorrent = {
         this.BalanceCoefficient = (this.WalletBalance-this.StartBalance)/(status['total_earning']-this.StartEarning)
     },
     call: async function({api = '', params, method = 'GET'} = {}) {
-        return JSON.parse((await request({
+        return JSON.parse(await request({
             uri: this.root_url + api,
             method: method,
             qs: {
@@ -139,7 +149,9 @@ utorrent = {
             },
             auth: this.auth,
             jar: this.cookies
-        })))
+        }).on('error',function(err){
+            log(err)
+        }))
     },
 
     get_torrents: async function() {
@@ -220,8 +232,7 @@ utorrent = {
         	}
 
             if (result.torrents[i][tor_status].match(/^(Finished)/i)){
-                //log (result.torrents[i][tor_name])
-                await this.stop_start(result.torrents[i][0])
+                //await this.stop_start(result.torrents[i][0])
             }
 
         	if (result.torrents[i][tor_status].match(/^(Seeding)/i) && result.torrents[i][tor_active_peers] > 0 ){
@@ -430,7 +441,14 @@ utorrent = {
 
         var BalanceChange = Math.floor((this.WalletBalance-this.StartBalance)*1000000)/1000000
 
+        var BalanceIncome = (BalanceChange/(fromStartTime/3600))
+
         log ('Your balance:',this.StartBalance,colors.green('+'+BalanceChange),'('+this.WalletBalance+')')
+        if (BalanceIncome>=0){
+            log ('Balance income:',colors.green('+'+BalanceIncome))
+        } else {
+            log ('Balance income:',colors.red(BalanceIncome))
+        }
         
         log ('Balance Ratio:',colors.green(Number( Math.floor(this.BalanceCoefficient*100)/100) ))
 
