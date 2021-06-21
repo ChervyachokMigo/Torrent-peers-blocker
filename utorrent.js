@@ -25,7 +25,7 @@ log = console.log.bind(console)
 
 var global_peers_country = new Array();
 
-
+const reducer = (accumulator, currentValue) => accumulator + currentValue;
 
 utorrent = {
     //constantes
@@ -40,13 +40,19 @@ utorrent = {
 
     local_port: 10107,  //torrent port
 
-    blockAllAfter: 30 , //ticks
-    minBalanceChangeReset: 0.2, // btt/tick
-    updateRateSec: 15 , //sec
+    blockAllAfter: 24 , //ticks
+    minBalanceChangeReset: 0.4, // btt/tick
+    BonusBalanceChangeReset: 3, // btt/tick
+    updateRateSec: 130 , //sec
     isAutoStartAllTorrents: 0 ,
     clearFirewallInterval: 3600,
     max_firewall_rules: 3000,
-    
+    DontBlockAllPeersAfterTimer: 1,
+    minBTTHour: 60,
+
+
+    isClearFireWall: 1,
+
     delete_torrents: 0, //1 true
     //delete paramenets
     minupload: 40, //KB/sec
@@ -78,6 +84,8 @@ utorrent = {
     StartEarning:0,
     StartTime:0,
     torrentsInactive: [],
+    balanceGetList:[],
+    HourBalances: [],
 
     init: async function() {
         var $, token_html
@@ -481,7 +489,8 @@ utorrent = {
         var BalanceIncome = Math.floor((BalanceChange/(fromStartTime/3600))*this.accuracy_float)/this.accuracy_float
         log ('Refreshing...')
         log ('[TIME]')
-        log (' From start [',colors.yellow(prependZero(Math.floor(fromStartTime/3600))+':'+prependZero(Math.floor((fromStartTime/60)%60))+':'+prependZero(fromStartTime%60)),']')
+        var FromstartTimeText = prependZero(Math.floor(fromStartTime/3600))+':'+prependZero(Math.floor((fromStartTime/60)%60))+':'+prependZero(fromStartTime%60)
+        log (' From start [',colors.yellow(FromstartTimeText),']')
         log (' Now [ '+colors.yellow( prependZero(datetime.getHours())+':'+prependZero(datetime.getMinutes())+':'+prependZero(datetime.getSeconds()) )+' ]')
         
         log ('[BALANCE]')
@@ -570,14 +579,34 @@ utorrent = {
 
         */
 
-        
 
-        if (this.balanceChange>0){
-            this.blockAllAfterTemp = this.blockAllAfterTemp + 1
-        }
-
-        if (this.balanceChange>this.minBalanceChangeReset){
+        if (this.DontBlockAllPeersAfterTimer == 1){
             this.blockAllAfterTemp = this.blockAllAfter
+        }
+        if (this.StartBalance != this.balanceChange){
+
+            this.HourBalances.push(this.balanceChange)
+            if (this.HourBalances.length>3600/this.updateRateSec){
+                this.HourBalances.shift();
+            }
+            var SumHourBalance = this.HourBalances.reduce(reducer)
+
+            log(" BTT in last hour:",colors.green( Math.floor(SumHourBalance*this.accuracy_float)/this.accuracy_float ),'('+this.HourBalances.length+')')
+
+            if (SumHourBalance>this.minBTTHour){
+                this.blockAllAfterTemp = this.blockAllAfterTemp + 1
+            }
+
+            if (this.balanceChange>this.minBalanceChangeReset){
+                this.blockAllAfterTemp = this.blockAllAfter
+                this.balanceGetList.push([FromstartTimeText,this.balanceChange])
+                //if (this.balanceChange>this.BonusBalanceChangeReset){
+               //     this.blockAllAfterTemp = this.blockAllAfterTemp + this.blockAllAfter
+               // }
+                log (colors.green('Change peers timer reset'))
+            }
+
+            log (this.balanceGetList)
         }
 
         if (this.blockAllAfterTemp <=1){
@@ -595,7 +624,7 @@ utorrent = {
                 return 1
             })
             this.blockAllAfterTemp = this.blockAllAfter
-            log ('blocked all peers')
+            log (colors.green('Blocked all peers'))
         } else {
             peers2block = peers.filter(function(peerfun) {
             	var expr_country = 0
@@ -618,8 +647,11 @@ utorrent = {
 
         }
 //log (peers2block)
+        var resetPeersTime = this.blockAllAfterTemp*this.updateRateSec
+        log (' To reset peers',colors.green(Math.floor((1-this.blockAllAfterTemp/this.blockAllAfter)*10000)/100),"%",'['+
+            colors.yellow(prependZero(Math.floor(resetPeersTime/60)%60))+':'+colors.yellow(prependZero(Math.floor(resetPeersTime%60)))+']')
         this.blockAllAfterTemp = this.blockAllAfterTemp - 1
-        log (' Change peers',colors.green(Math.floor((1-this.blockAllAfterTemp/this.blockAllAfter)*10000)/100),"%")
+
 
         if (peers2block.isEmpty()) {
              log (' Blocked (Last/Need/Total):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(this.firewall_ips.length) )
@@ -699,7 +731,7 @@ utorrent = {
 
     },
     run: async function() {
-    	//await this.clear_firewall()
+    	if (this.isClearFireWall == 1) await this.clear_firewall()
         await this.block()
         return this.task = setInterval(async() => {
             return (await this.block())
