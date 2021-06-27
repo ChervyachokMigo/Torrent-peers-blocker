@@ -22,18 +22,19 @@ utorrent = {
     //constantes
     utorrent_webui: 'http://127.0.0.1:8081/gui/' ,
     auth: {
-        user: '',
-        pass: ''
+        user: 'user',
+        pass: 'pass'
     },
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
     PortData: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\port',
-
+    WalletLogPath: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\wallet.log',
     //disabled
     qbittorrent_webui: 'http://127.0.0.1:8082/',
     local_port: 10107,  //torrent port
 
     //switchers
     isClearFireWall: 1 ,
+    ShowWalletLog: 1,
     DontBlockAllPeersAfterTimer: 1 ,
     delete_torrents: 0 ,
     stop_torrents: 0 ,
@@ -43,9 +44,8 @@ utorrent = {
 
     //main parameters
     updateRateSec: 35 , //sec
-    max_firewall_rules: 2800,   //number of rules to clear rules list
+    max_firewall_rules: 400,   //number of rules to clear rules list
     minBTTHour: 60,
-
 
     //BonusBalanceChangeReset: 3, // btt/tick
     //clearFirewallInterval: 3600,
@@ -139,6 +139,30 @@ utorrent = {
         }
         return 1
     },
+    getWalletLogData: async function(){
+        var datetime = new Date
+        var data = await fs.readFile(this.WalletLogPath, 'utf8')
+        data = data.split('\r')
+        //var dataarr = []
+        dataarr = [this.updateRateSec]
+        log ('[WALLET LOG]')
+        data.forEach(function callback(currentValue, index, array) {
+            if (array.length - index < 100){
+                currentValue = currentValue.trim()
+                if (currentValue !== ''){
+                    let regex = /^\[([0-9-:. ]+)\] \[[a-zA-Z]+\] \[([a-zA-Z]+)\] x:\\jenkins-workspace\\workspace\\token-wallet-pipeline\\src\\([a-z_A-Z]+)\.cpp::([0-9]+)::([a-z :_.A-Z]+)$/gi
+                    var res = regex.exec(currentValue)
+                    //log (res);
+                    var strdate= (datetime-Date.parse(res[1]))/1000;
+                    if (strdate<this[0]){
+                        log (' '+strdate,res[3]+'.cpp:'+res[4],res[5])
+                    }
+                }
+            }
+            //log (currentValue)
+        },dataarr);
+        return 1
+    },
     getWalletData: async function (){
         var $,status,connect_request
         connect_request = (await request({   
@@ -156,6 +180,7 @@ utorrent = {
             this.StartBalance = this.WalletBalance
         }
     },
+
     get_download_torrents: async function() {
         var $,data,i
 
@@ -516,6 +541,7 @@ utorrent = {
         return Number(data[0])
     },
 
+
     Check_balance_change: async function(){
         if (this.DontBlockAllPeersAfterTimer == 1){
             this.blockAllAfterTemp = this.blockAllAfter
@@ -565,6 +591,9 @@ utorrent = {
         this.FromstartTimeText = prependZero(Math.floor(fromStartTime/3600))+':'+prependZero(Math.floor((fromStartTime/60)%60))+':'+prependZero(fromStartTime%60)
 
         log ('Refreshing...')
+        if (this.ShowWalletLog == 1){
+            await this.getWalletLogData()
+        }
         log ('[TIME]')
         log (' From start [',colors.yellow(this.FromstartTimeText),']')
         log (' Now [ '+colors.yellow( prependZero(datetime.getHours())+':'+prependZero(datetime.getMinutes())+':'+prependZero(datetime.getSeconds()) )+' ]')
@@ -805,12 +834,13 @@ utorrent = {
 
             log (' Blocked (Last/Need/Total):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(all_blocked_text) )
         }
-
+        
         log ('- - -\r')
 
         return 1
 
     },
+
     run: async function() {
     	if (this.isClearFireWall == 1) await this.clear_firewall()
         await this.block()
