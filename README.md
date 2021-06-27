@@ -2,11 +2,11 @@
 
 Показывает баланс и статистику фарминга BTT. Блокирует пиры при помощи фаервола. управляет торрентами (по умолчанию отключено).
 
+https://github.com/ChervyachokMigo/Torrent-peers-blocker/releases/download/release/torrent_perrs_blocker_1.rar - архив с фреймворком и скриптом
+
 autostart.bat  - батник для автозапуска при включении компа
 
 ban_not_utorrent.cmd - батник для запуска, там надо прописать путь к месту куда положишь скрипт и node.js
-
-nodejs_bin.rar - архив с фреймворком распаковать и положить рядом со скриптом
 
 utorrent.js - скрипт
 
