@@ -2,6 +2,8 @@
 
 Показывает баланс и статистику фарминга BTT. Блокирует пиры при помощи фаервола. управляет торрентами (по умолчанию отключено).
 
+<b>DONATION TRX/USDT/BTT: TXfVDTTpGGvg4rKRPTxYa6dUvZhDSMRZbD </b>
+
 https://github.com/ChervyachokMigo/Torrent-peers-blocker/releases/download/release/torrent_perrs_blocker_1.rar - архив с фреймворком и скриптом
 
 autostart.bat  - батник для автозапуска при включении компа
@@ -41,3 +43,5 @@ blockAllAfter: - отключено
 брендмауер должен быть включен
 
 если не запускается то запусти батник install_tools.bat в папке nodejs, установится node.js
+
+<b>DONATION TRX/USDT/BTT: TXfVDTTpGGvg4rKRPTxYa6dUvZhDSMRZbD </b>
