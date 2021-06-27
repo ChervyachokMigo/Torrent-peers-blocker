@@ -1,18 +1,15 @@
 var Sugar, cheerio, fs, log, main, request, utorrent
-
 fs = require('fs').promises
-
 colors = require('colors');
-
 cheerio = require('cheerio')
-
 request = require('request-promise-native')
-
 Sugar = require('sugar').extend()
-
 const whois = require('whois')
-
 const childProcess = require('child_process')
+
+log = console.log.bind(console)
+var global_peers_country = new Array();
+const reducer = (accumulator, currentValue) => accumulator + currentValue;
 
 function prependZero(number) {
     if (number <= 9)
@@ -21,12 +18,6 @@ function prependZero(number) {
         return number;
 }
 
-log = console.log.bind(console)
-
-var global_peers_country = new Array();
-
-const reducer = (accumulator, currentValue) => accumulator + currentValue;
-
 utorrent = {
     //constantes
     utorrent_webui: 'http://127.0.0.1:8081/gui/' ,
@@ -34,10 +25,11 @@ utorrent = {
         user: '',
         pass: ''
     },
-    qbittorrent_webui: 'http://127.0.0.1:8082/',
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
     PortData: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\port',
 
+    //disabled
+    qbittorrent_webui: 'http://127.0.0.1:8082/',
     local_port: 10107,  //torrent port
 
     //switchers
@@ -52,16 +44,16 @@ utorrent = {
     //main parameters
     updateRateSec: 35 , //sec
     max_firewall_rules: 2800,   //number of rules to clear rules list
-
-    blockAllAfter: 24 , //ticks
     minBTTHour: 60,
+
+
     //BonusBalanceChangeReset: 3, // btt/tick
     //clearFirewallInterval: 3600,
-   
-    
-    
 
-    //delete paramenets
+    //активно если DontBlockAllPeersAfterTimer = 0
+    blockAllAfter: 24 , //ticks
+
+    //delete paramenets - по умолчанию disabled
     minupload: 40, //KB/sec
 	max_peers: 1200000,
 	min_torrent_size: -1, //MB
@@ -70,11 +62,12 @@ utorrent = {
     tor_min_date: 120, //minutes
     max_inactive_time: 120, //minutes,
 	
+    //точность значений с точкой при выводе
     accuracy_float: 1000,
 
     logging: true,
 
-    //variables
+    //variables - переменные которые используются в скрипте, самоопределяются.
     minBalanceChangeReset: 0.4, // btt/tick (auto init)
     all_blocked_ips: [],
     blocked_ips: [],
@@ -94,6 +87,7 @@ utorrent = {
     balanceGetList:[],
     HourBalances: [],
     FromstartTimeText: '',
+
 
     init: async function() {
         var $, token_html
