@@ -27,47 +27,46 @@ utorrent = {
     },
     webui_port: 8080 ,
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
-    PortData: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\port' ,
-    WalletLogPath: 'C:\\Users\\Администратор\\AppData\\Local\\BitTorrentHelper\\wallet.log' ,
-
-    //disabled
-    //qbittorrent_webui: 'http://127.0.0.1:8082/',
-    //local_port: 10107,  //torrent port
-
-    //switchers
-    isClearFireWall: 1 ,
-    ShowWalletLog: 1,
-    DontBlockAllPeersAfterTimer: 1 ,
-    delete_torrents: 0 ,
-    stop_torrents: 0 ,
-    isAutoStartAllTorrents: 0 ,
-    showHighIncomeBTT: 1,
-    useFirewallList: 0,
 
     //main parameters
     updateRateSec: 70 , //sec
     max_firewall_rules: 400,   //number of rules to clear rules list
-    minBTTHour: 60,
+    BTThighIncomeSec: 0.04, //BTT/sec в секунду, при достижении - количество полученных BTT добавляется в список
 
-    //BonusBalanceChangeReset: 3, // btt/tick
-    //clearFirewallInterval: 3600,
+    //точность значений с точкой, при выводе
+    accuracy_float: 1000,
 
-    //активно если DontBlockAllPeersAfterTimer = 0
-    blockAllAfter: 24 , //ticks
+    //switchers - переключатели различных функций
+    isClearFireWall: 1 ,    //очищать фаервол при запуске (стирать правила торрента)
+    ShowWalletLog: 1,   //показывать лог кошелька
+    DontBlockAllPeersAfterTimer: 1 ,    //Не блокировать все пиры по таймеру (счетчику)
+    showHighIncomeBTT: 1,   //показывать список высоких значений BTT за тик, регулируется с помощью BTThighIncomeSec
+    delete_torrents: 0 , //удалять торренты по параметрам которые ниже
+    stop_torrents: 0 , //останавливать все неактивные торренты
+    isAutoStartAllTorrents: 0 , //автозапуск всех остановленых торрентов
+    useFirewallList: 0, //проверять список правил фаервола каждый раз
+
+    logging: true,
 
     //delete paramenets - по умолчанию disabled
     minupload: 40, //KB/sec
-	max_peers: 1200000,
-	min_torrent_size: -1, //MB
-	max_torrent_size: 150000, //MB
-	max_active_peers: 100,
+    max_peers: 1200000,
+    min_torrent_size: -1, //MB
+    max_torrent_size: 150000, //MB
+    max_active_peers: 100,
     tor_min_date: 120, //minutes
     max_inactive_time: 120, //minutes,
-	
-    //точность значений с точкой при выводе
-    accuracy_float: 1000,
 
-    logging: true,
+    //Параметры таймера блкировки, 
+    //disabled по умолчанию, активно если DontBlockAllPeersAfterTimer = 0
+    blockAllAfter: 24 , //ticks
+    minBTTHour: 60, //если достигло этого значения то не уменьшаем таймер блокировки
+
+    //полностью disabled
+    //BonusBalanceChangeReset: 3, // btt/tick
+    //clearFirewallInterval: 3600,
+    //qbittorrent_webui: 'http://127.0.0.1:8082/',
+    //local_port: 10107,  //torrent port
 
     //variables - переменные которые используются в скрипте, самоопределяются.
     utorrent_webui: 'http://127.0.0.1:8080/gui/' ,
@@ -113,7 +112,7 @@ utorrent = {
         this.StartTime = new Date
         
         this.blockAllAfterTemp = this.blockAllAfter
-        this.minBalanceChangeReset = this.updateRateSec * 0.04
+        this.minBalanceChangeReset = this.updateRateSec * this.BTThighIncomeSec
 
         log ('[OPTIONS]')
         log ('Refresh rate of one tick',colors.yellow(this.updateRateSec,'sec'))
@@ -148,7 +147,7 @@ utorrent = {
     },
     getWalletLogData: async function(){
         var datetime = new Date
-        var data = await fs.readFile(this.WalletLogPath, 'utf8')
+        var data = await fs.readFile(process.env.LOCALAPPDATA+'\\BitTorrentHelper\\wallet.log', 'utf8')
         data = data.split('\r')
         //var dataarr = []
         dataarr = [this.updateRateSec]
@@ -160,9 +159,11 @@ utorrent = {
                     let regex = /^\[([0-9-:. ]+)\] \[[a-zA-Z]+\] \[([a-zA-Z]+)\] x:\\jenkins-workspace\\workspace\\token-wallet-pipeline\\src\\([a-z_A-Z]+)\.cpp::([0-9]+)::([a-z :_.A-Z]+)$/gi
                     var res = regex.exec(currentValue)
                     //log (res);
-                    var strdate= (datetime-Date.parse(res[1]))/1000;
-                    if (strdate<this[0]){
-                        log (' '+strdate,res[3]+'.cpp:'+res[4],res[5])
+                    if (res !== null){
+                        var strdate= (datetime-Date.parse(res[1]))/1000;
+                        if (strdate<this[0]){
+                            log (' '+strdate,res[3]+'.cpp:'+res[4],res[5])
+                        }
                     }
                 }
             }
@@ -353,7 +354,8 @@ utorrent = {
                 
             }
 
-            tor_exclude = result.torrents[i][tor_name] === 'Songs.7z' || result.torrents[i][tor_name].match(/^(MP3)/i)
+            //tor_exclude = result.torrents[i][tor_name] === 'Songs.7z' || result.torrents[i][tor_name].match(/^(MP3)/i)
+            tor_exclude = 0
 
             if (this.delete_torrents == 1 && !tor_exclude && result.torrents[i][tor_status].match(/^(Seeding)/i) && result.torrents[i][16] == 65536 && result.torrents[i][tor_active_peers] == 0
              //&& (Math.floor ( datetime.getTime()/1000 ) - result.torrents[i][tor_date] ) / 60 > this.tor_min_date 
@@ -577,7 +579,8 @@ utorrent = {
 },
 
     readport: async function(){
-        var data = await fs.readFile(this.PortData, 'utf8')
+        var data = await fs.readFile(process.env.LOCALAPPDATA+'\\BitTorrentHelper\\port', 'utf8')
+ 
         data = data.split('\r')
         return Number(data[0])
     },
