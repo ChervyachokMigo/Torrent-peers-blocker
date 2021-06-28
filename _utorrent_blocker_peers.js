@@ -88,7 +88,7 @@ utorrent = {
     balanceGetList:[],
     HourBalances: [],
     FromstartTimeText: '',
-
+    walletLog_info: {'Successes':0,'Warnings':0,'Errors':0},
 
     init: async function() {
         var $, token_html
@@ -149,7 +149,7 @@ utorrent = {
         var data = await fs.readFile(process.env.LOCALAPPDATA+'\\BitTorrentHelper\\wallet.log', 'utf8')
         data = data.split('\r')
         //var dataarr = []
-        dataarr = [this.updateRateSec]
+        dataarr = [this.updateRateSec,0,0,0]
         log ('[WALLET LOG]')
         data.forEach(function callback(currentValue, index, array) {
             if (array.length - index < 100){
@@ -163,19 +163,42 @@ utorrent = {
                         if (strdate<this[0]){
                             if (res[2]==='error'){
                                 log (colors.red(' '+strdate,res[3]+'.cpp:'+res[4],res[5]))
+                                this[3]++
                             }
                             if (res[2]==='info'){
-                                log (' '+strdate,res[3]+'.cpp:'+res[4],res[5])
+                                
+                                if (res[5].includes('ledger_close_chan_success')==true){
+                                    log (' '+strdate,res[3]+'.cpp:'+res[4],colors.green(res[5]))
+                                    this[1]++
+                                } else {
+                                    log (' '+strdate,res[3]+'.cpp:'+res[4],res[5])
+                                }
                             }
                             if (res[2]==='warning'){
                                 log (colors.yellow(' '+strdate,res[3]+'.cpp:'+res[4],res[5]))
+                                this[2]++
                             }
+                            
                         }
                     }
                 }
             }
             //log (currentValue)
         },dataarr);
+        //log (dataarr)
+        this.walletLog_info['Successes'] +=dataarr[1]
+        this.walletLog_info['Warnings'] +=dataarr[2]
+        this.walletLog_info['Errors'] +=dataarr[3]
+            log (' Successes:',this.walletLog_info['Successes'])
+            log (' Warnings:',this.walletLog_info['Warnings'])
+        if (this.walletLog_info['Errors']==0){
+            log (' Errors:',this.walletLog_info['Errors'],'('+Math.floor(this.walletLog_info['Errors']/this.walletLog_info['Successes']*10000)/100+'%)')
+        } else {
+            log (' Errors:',colors.red(this.walletLog_info['Errors']),'('+Math.floor(this.walletLog_info['Errors']/this.walletLog_info['Successes']*10000)/100+'%)')
+        }
+            
+            
+            
         return 1
     },
     get_connections_data: async function(){
@@ -412,7 +435,7 @@ utorrent = {
 
 	    }
        log (' Torrents',colors.green('active: '+this.torrents.length),',',colors.red('inactive:',this.torrentsInactive.length))
-
+       log (' Total:',this.torrents.length+this.torrentsInactive.length)
         return this.hashes = this.torrents.map(function(x) {
 	            return x[0]
         })
@@ -576,6 +599,8 @@ utorrent = {
         peers = peers.unique('ip').sortBy('client')
         log (' Total peers:',colors.green(peers.length),'('+NotUniquePeersLength+')')
         log (' BTT Peers:',colors.green(this.BTTPeers))
+        var Unknown_peers = peers.length-this.BTTPeers
+        log (' Unknown peers:',colors.yellow(Unknown_peers),'('+Math.floor(Unknown_peers/peers.length*10000)/100+'%)')
         return peers
     },
     clear_firewall: async function(){
