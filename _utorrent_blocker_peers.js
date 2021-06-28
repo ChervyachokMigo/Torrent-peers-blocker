@@ -155,13 +155,21 @@ utorrent = {
             if (array.length - index < 100){
                 currentValue = currentValue.trim()
                 if (currentValue !== ''){
-                    let regex = /^\[([0-9-:. ]+)\] \[[a-zA-Z]+\] \[([a-zA-Z]+)\] x:\\jenkins-workspace\\workspace\\token-wallet-pipeline\\src\\([a-z_A-Z]+)\.cpp::([0-9]+)::([a-z :_.A-Z]+)$/gi
+                    let regex = /^\[([0-9\-:. ]+)\] \[[a-z A-Z]+\] \[([a-z A-Z]+)\] x:\\jenkins-workspace\\workspace\\token-wallet-pipeline\\src\\([a-z _A-Z]+)\.cpp::([0-9 ]+)::([0-9A-Za-z\_\ \-\{\}\[\]\:\,\"\.]+)$/gi
                     var res = regex.exec(currentValue)
                     //log (res);
                     if (res !== null){
                         var strdate= (datetime-Date.parse(res[1]))/1000;
                         if (strdate<this[0]){
-                            log (' '+strdate,res[3]+'.cpp:'+res[4],res[5])
+                            if (res[2]==='error'){
+                                log (colors.red(' '+strdate,res[3]+'.cpp:'+res[4],res[5]))
+                            }
+                            if (res[2]==='info'){
+                                log (' '+strdate,res[3]+'.cpp:'+res[4],res[5])
+                            }
+                            if (res[2]==='warning'){
+                                log (colors.yellow(' '+strdate,res[3]+'.cpp:'+res[4],res[5]))
+                            }
                         }
                     }
                 }
@@ -579,6 +587,7 @@ utorrent = {
 
     readport: async function(){
         var data = await fs.readFile(process.env.LOCALAPPDATA+'\\BitTorrentHelper\\port', 'utf8')
+ 
         data = data.split('\r')
         return Number(data[0])
     },
