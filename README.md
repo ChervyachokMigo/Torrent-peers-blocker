@@ -13,6 +13,7 @@
 <img width=900 src="https://github.com/ChervyachokMigo/Torrent-peers-blocker/blob/main/screenshot_preview.png?raw=true"/>
 
 <h2>Важные файлы (описание)</h2>
+
 * start_script.cmd - батник для запуска скрипта
 
 * nodejs - папка с node.js и скриптом
