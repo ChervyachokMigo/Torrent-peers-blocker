@@ -1,11 +1,14 @@
 # Torrent-peers-blocker
 
-Показывает баланс и статистику фарминга BTT. Блокирует пиры при помощи фаервола. управляет торрентами (по умолчанию отключено).
+* Блокирует пиры при помощи фаервола. 
+* Показывает баланс и статистику фарминга BTT.
+* Управляет торрентами (по умолчанию отключено).
 
-<b>DONATION TRX/USDT/BTT: TXfVDTTpGGvg4rKRPTxYa6dUvZhDSMRZbD </b>
+<h3><b>DONATION TRX/USDT/BTT: TXfVDTTpGGvg4rKRPTxYa6dUvZhDSMRZbD </b></h3>
 
-https://github.com/ChervyachokMigo/Torrent-peers-blocker/releases/download/release/torrent_perrs_blocker_1.rar - архив с фреймворком и скриптом
+<h2><a href="https://github.com/ChervyachokMigo/Torrent-peers-blocker/releases/download/release/torrent_peer_blocker.rar">Скачать архив с фреймворком и скриптом</a></h2>
 
+<h2>Настройки</h2>
 autostart.bat  - батник для автозапуска при включении компа
 
 ban_not_utorrent.cmd - батник для запуска, там надо прописать путь к месту куда положишь скрипт и node.js
