@@ -21,26 +21,27 @@ function prependZero(number) {
 utorrent = {
     //constantes 
     auth: {
-        user: 'user',
-        pass: 'pass'
+        user: '',
+        pass: ''
     },
     webui_port: 8080 ,
     TorrentData: '%APPDATA%\\uTorrent\\uTorrent.exe' ,
 
     //main parameters
-    updateRateSec: 70 , //sec
-    max_firewall_rules: 400,   //number of rules to clear rules list
+    updateRateSec: 80 , //sec
+    max_firewall_rules: 3000,   //number of rules to clear rules list
     BTThighIncomeSec: 0.04, //BTT/sec в секунду, при достижении - количество полученных BTT добавляется в список
 
     //точность значений с точкой, при выводе
     accuracy_float: 1000,
 
     //switchers - переключатели различных функций
+    blockPeers: 1,
     isClearFireWall: 1 ,    //очищать фаервол при запуске (стирать правила торрента)
     ShowWalletLog: 1,   //показывать лог кошелька
     DontBlockAllPeersAfterTimer: 1 ,    //Не блокировать все пиры по таймеру (счетчику)
     showHighIncomeBTT: 1,   //показывать список высоких значений BTT за тик, регулируется с помощью BTThighIncomeSec
-    delete_torrents: 0 , //удалять торренты по параметрам которые ниже
+    delete_torrents: 1 , //удалять торренты по параметрам которые ниже
     stop_torrents: 0 , //останавливать все неактивные торренты
     isAutoStartAllTorrents: 0 , //автозапуск всех остановленых торрентов
     useFirewallList: 0, //проверять список правил фаервола каждый раз
@@ -48,12 +49,12 @@ utorrent = {
     logging: true,
 
     //delete paramenets - по умолчанию disabled
-    minupload: 40, //KB/sec
+    minupload: 0, //KB/sec
     max_peers: 1200000,
-    min_torrent_size: -1, //MB
+    min_torrent_size: 100, //MB
     max_torrent_size: 150000, //MB
-    max_active_peers: 100,
-    tor_min_date: 120, //minutes
+    min_active_peers: 1,
+    tor_min_time: 30, //minutes
     max_inactive_time: 120, //minutes,
 
     //Параметры таймера блкировки, 
@@ -84,6 +85,7 @@ utorrent = {
     StartBalance:0,
     StartEarning:0,
     StartTime:0,
+    BlockRuleCounter: 1,
     torrentsInactive: [],
     balanceGetList:[],
     HourBalances: [],
@@ -349,8 +351,19 @@ utorrent = {
         tor_seeds = 15
         tor_status = 21
         tor_date = 23
-        var tor_exclude
+
+        var tor_exception
+        var isSeeding
+        var peersCoef
+        var TorrentExsistsTime
+
         for (i = 0, len = result.torrents.length; i < len; i++) {
+            
+            tor_exception = result.torrents[i][tor_name] === 'Songs.7z' || result.torrents[i][tor_name].match(/^(MP3)/i)
+            isSeeding = result.torrents[i][tor_status].match(/^(Seeding)/i)
+            peersCoef = result.torrents[i][tor_seeds]/result.torrents[i][tor_peers]
+            TorrentExsistsTime = Math.floor ( datetime.getTime()/1000 ) - result.torrents[i][tor_date]  / 60 
+
             //log (result.torrents[i][tor_status])
         	/*if (       		
         		!result.torrents[i][tor_name].match(/^(MP3)/i) && result.torrents[i][tor_active_peers] > 0 && result.torrents[i][tor_upload_speed]/result.torrents[i][tor_active_peers] < this.minupload*1024
@@ -365,7 +378,7 @@ utorrent = {
                 await this.stop_start(result.torrents[i][0])
             }
 
-            if (result.torrents[i][tor_status].match(/^(Seeding)/i) && result.torrents[i][tor_active_peers] == 0 ){
+            if (isSeeding && result.torrents[i][tor_active_peers] == 0 ){
                 finded = 0
                 if (this.torrentsInactive.length>0){ 
                     for (j = 0; j < this.torrentsInactive.length; j++) {
@@ -384,41 +397,41 @@ utorrent = {
                 
             }
 
-            //tor_exclude = result.torrents[i][tor_name] === 'Songs.7z' || result.torrents[i][tor_name].match(/^(MP3)/i)
-            tor_exclude = 0
-
-            if (this.delete_torrents == 1 && !tor_exclude && result.torrents[i][tor_status].match(/^(Seeding)/i) && result.torrents[i][16] == 65536 && result.torrents[i][tor_active_peers] == 0
-             //&& (Math.floor ( datetime.getTime()/1000 ) - result.torrents[i][tor_date] ) / 60 > this.tor_min_date 
+            /*if (this.delete_torrents == 1 && !tor_exception && result.torrents[i][tor_status].match(/^(Seeding)/i) && result.torrents[i][16] == 65536 && result.torrents[i][tor_active_peers] == 0
+             //&& (Math.floor ( datetime.getTime()/1000 ) - result.torrents[i][tor_date] ) / 60 > this.tor_min_time
              ){
                 //log((Math.floor ( datetime.getTime()/1000 ) - result.torrents[i][tor_date] ) / 60)
                 //log (result.torrents[i][16],': ',result.torrents[i][tor_name])
                 (await this.delete_torrent(result.torrents[i][0]))
 
                 log(" Delete torrent by available: ",result.torrents[i][tor_name])
-            }
-
-        	if (this.delete_torrents == 1 && !tor_exclude &&
+            }*/
+            
+        	if (this.delete_torrents == 1 && !tor_exception && isSeeding && 
         		(result.torrents[i][tor_size] < this.min_torrent_size*1024*1024 || result.torrents[i][tor_size] > this.max_torrent_size*1024*1024 || 
-        		result.torrents[i][tor_seeds] > this.max_peers || result.torrents[i][tor_peers] > this.max_peers
-        		//result.torrents[i][tor_active_peers] == 0 ||
-        		//result.torrents[i][tor_active_peers] > this.max_active_peers ||
+        		TorrentExsistsTime > this.tor_min_time && 
+                (
+                    result.torrents[i][tor_seeds] > this.max_peers || result.torrents[i][tor_peers] > this.max_peers ||
+                    (result.torrents[i][tor_active_peers] < this.min_active_peers)
+                )
         		/*( 
-        			(Math.floor ( datetime.getTime()/1000 ) - result.torrents[i][tor_date] ) / 60 > this.tor_min_date &&
+        			(Math.floor ( datetime.getTime()/1000 ) - result.torrents[i][tor_date] ) / 60 > this.tor_min_time &&
         			(
         				result.torrents[i][tor_active_peers] > this.max_active_peers && 
         				result.torrents[i][tor_upload_speed]/result.torrents[i][tor_active_peers] < this.minupload*1024
         			)
         		) */
-        		)
+        		
+                )
             ){
         		
-        		(await this.delete_torrent(result.torrents[i][0]))
+        		await this.delete_torrent(result.torrents[i][0])
 
         		log(" Delete torrent by size or peers: ",result.torrents[i][tor_name])
 
         	}
 
-        	if (result.torrents[i][tor_status].match(/^(Seeding)/i) && result.torrents[i][tor_active_peers] > 0 ){
+        	if (isSeeding && result.torrents[i][tor_active_peers] > 0 ){
 
 		        this.torrents.push(result.torrents[i])
 
@@ -498,6 +511,14 @@ utorrent = {
                 getmsg: 1
             }
         }))
+       /* if (this.torrentsInactive.length>0){
+            for (j = 0; j < this.torrentsInactive.length; j++) {
+                if (this.torrentsInactive[j][0]==hash){
+                    this.torrentsInactive.splice(j,1)
+                    //log ("became active ",this.torrentsInactive[j][tor_name])
+                }
+            }
+        }*/
         return 1
 	},
     get_peer_country: async function(peer) {
@@ -522,7 +543,7 @@ utorrent = {
         }
         var result = await whois.lookup(peer[1],await res_fun)
 
-        log (res_fun.data)
+        log (result)
         return result
         /*,  await */
     },
@@ -604,9 +625,9 @@ utorrent = {
         return peers
     },
     clear_firewall: async function(){
-    	childProcess.execSync(`chcp 65001 | netsh advfirewall firewall delete rule name=all program="${this.TorrentData}"`)
-        childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_μTorrent (TCP-In)" protocol=TCP action=allow program="${this.TorrentData}" dir=in`)
-        childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_μTorrent (UDP-In)" protocol=UDP action=allow program="${this.TorrentData}" dir=in`)
+        log ('Clearing..')
+    	await childProcess.execSync(`chcp 65001 | netsh advfirewall firewall delete rule name=all program="${this.TorrentData}"`)
+        await this.Prepare_Firewall()
         log ('Deleted rules.')
 },
 
@@ -634,7 +655,7 @@ utorrent = {
 
             if (this.balanceChange>this.minBalanceChangeReset){
                 this.blockAllAfterTemp = this.blockAllAfter
-                this.balanceGetList.push([this.FromstartTimeText,this.balanceChange])
+                this.balanceGetList.push([this.FromstartTimeText,Math.floor(this.balanceChange*this.accuracy_float)/this.accuracy_float])
                 //if (this.balanceChange>this.BonusBalanceChangeReset){
                //     this.blockAllAfterTemp = this.blockAllAfterTemp + this.blockAllAfter
                // }
@@ -697,15 +718,17 @@ utorrent = {
              log (' Balance income:','0 BTT/hour')
         }
 
-        log ('[TORRENTS]')
-        await this.get_torrents()
 
-        await this.check_torrents_inactive()
-       
-        blocked_ip_counter = 0
+        if (this.blockPeers == 1){
+            log ('[TORRENTS]')
+            await this.get_torrents()
 
-        log ('[PEERS]')
-        peers = (await this.get_all_peers())       
+            //await this.check_torrents_inactive()
+           
+            blocked_ip_counter = 0
+
+            log ('[PEERS]')
+            peers = (await this.get_all_peers())       
 
         /*
 
@@ -767,158 +790,203 @@ utorrent = {
 
 
 
-        if (this.DontBlockAllPeersAfterTimer==0 && this.blockAllAfterTemp <=1){
-             peers2block = peers.filter(function(peerfun) {
-                peerfun.ip = peerfun.ip.trim()
-                //log (peerfun.ip,':',peerfun.uploading_speed)
+            if (this.DontBlockAllPeersAfterTimer==0 && this.blockAllAfterTemp <=1){
+                 peers2block = peers.filter(function(peerfun) {
+                    peerfun.ip = peerfun.ip.trim()
+                    //log (peerfun.ip,':',peerfun.uploading_speed)
 
-                if (peerfun.ip == '' || peerfun.ip == ' ' || peerfun.ip.match(/(192\.168)|(127\.0)|(0\.0\.0\.0)/i)|('\n')) {
-                    return 0
-                }
-                
-                if (peerfun.uploading_speed==0){
-                    return 0
-                }
-                return 1
-            })
-            this.blockAllAfterTemp = this.blockAllAfter
-            log (colors.green('Blocked all peers'))
-        } else {
-            peers2block = peers.filter(function(peerfun) {
-            	var expr_country = 0
-            	//var expr_country = !peerfun.country.match (/(RU)/i)
-                //var expr_country = peerfun.country.match (/(00)|(IN)|(CA)|(NZ)|(PT)|(BD)|(AU)|(ID)|(SG)|(ZA)|(CN)|(AR)|(MX)|(BR)|(HK)|(IS)|(CL)|(US)/i) 
-            	var expr_client = !peerfun.client.match(/(BitTorrent 7\.10\.5)|(µTorrent 3\.5\.5)|(µTorrent\/3\.5\.5\.0)|(libtorrent\/1\.2\.)/i) || peerfun.client.match(/(FAKE)|(qBittorrent)/i)
-            	peerfun.ip = peerfun.ip.trim()
-                //log (peerfun.ip,':',peerfun.uploading_speed)
-                if (peerfun.ip == '' || peerfun.ip == ' ' || peerfun.ip.match(/(192\.168)|(127\.0)|(0\.0\.0\.0)/i)|('\n')) {
-                    return 0
-                }
-
-                /*if (peerfun.progress>250){
+                    if (peerfun.ip == '' || peerfun.ip == ' ' || peerfun.ip.match(/(192\.168)|(127\.0)|(0\.0\.0\.0)/i)|('\n')) {
+                        return 0
+                    }
+                    
+                    if (peerfun.uploading_speed==0){
+                        return 0
+                    }
                     return 1
-                }*/
-
-            	if (peerfun.country.length==0){
-            		return expr_client
-            	} else {
-            		return expr_country || expr_client
-            	}
-                
-            })
-
-        }
-
-        if( this.DontBlockAllPeersAfterTimer==0){
-            var resetPeersTime = this.blockAllAfterTemp*this.updateRateSec
-            log (' To reset peers',colors.green(Math.floor((1-this.blockAllAfterTemp/this.blockAllAfter)*10000)/100),"%",'['+
-                colors.yellow(prependZero(Math.floor(resetPeersTime/60)%60))+':'+colors.yellow(prependZero(Math.floor(resetPeersTime%60)))+']')
-            this.blockAllAfterTemp = this.blockAllAfterTemp - 1
-        }
-
-
-        if (peers2block.isEmpty()) {
-            log (' Blocked (Last/Need/Total):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(this.firewall_ips.length) )
-            log ('- - -\r')
-            return
-        }
-        
-        if (this.useFirewallList==1){
-            this.firewall_ips = []
-            firewallOut = childProcess.execSync(`chcp 65001 | netsh advfirewall firewall show rule name=all`).toString()
-            var firewallOutArr = firewallOut.split('\n')
-            firewallOutArr.forEach((firewall_rule) =>{
-                if (firewall_rule.match(/(Rule Name)/i) && firewall_rule.match(/(_bttblock_)/i)){
-                    this.firewall_ips.push(firewall_rule.substring(20).trim())
-                }
-            })
-            this.firewall_ips.unique()
-        }
-        
-        this.blocked_ips = []
-        this.blocked_ips = this.blocked_ips.append(peers2block.map(function(x){
-            return x.ip
-        })).unique()
-
-
-        if (this.useFirewallList==1){
-            if (this.firewall_ips.length>this.max_firewall_rules){
-            	//this.FirewallClearTimer = this.FirewallClearTimer - this.updateRateSec
-            	//if (this.FirewallClearTimer <=0){
-    	       		await this.clear_firewall()
-    	       		//this.FirewallClearTimer = this.clearFirewallInterval
-    	       	//}
-            }
-        } else {
-            if (this.all_blocked_ips.length>this.max_firewall_rules){
-                await this.clear_firewall()
-                this.all_blocked_ips = []
-            }
-        }
-     
-
-        if (this.blocked_ips.length>0){
-        for (i=0;i<this.blocked_ips.length;i++){
-
-                isFoundIp = 0
-                if (this.useFirewallList==1){
-                    if (this.firewall_ips.length>0){
-                        this.firewall_ips.forEach((firewall_ip_get) => {
-                            firewall_ip_get = firewall_ip_get.substring(('_utorrent_block_').length)
-                            if (firewall_ip_get === this.blocked_ips[i]){
-                                isFoundIp = 1
-                            }
-                        })
-                    }
-                } else {
-                    if (this.all_blocked_ips.length>0){
-                        this.all_blocked_ips.forEach((ip_get) => {
-                            if (ip_get === this.blocked_ips[i]){
-                                isFoundIp = 1
-                            }
-                        })
-                    }
-                }
-                if (isFoundIp == 0) {
-                    
-                    if (this.useFirewallList==0){
-                        this.all_blocked_ips.push(this.blocked_ips[i])
-                    }
-
-                    blocked_ip_counter++
-
-                    childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=in action=block remoteip=${this.blocked_ips[i]}`).toString()
-                	childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=out action=block remoteip=${this.blocked_ips[i]}`).toString()
-                                    	
-                    //childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=in action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=TCP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
-                    //childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=out action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=TCP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
-                	//childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=in action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=UDP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
-                    //childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=out action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=UDP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
-                    
-                    //chcp 65001 | netsh advfirewall firewall show rule name=all | find "utorrent" /C
-                }
-            }
-        }
-
-        
-        if (this.logging) {
-            if (this.useFirewallList==1){
-                var all_blocked_text = this.firewall_ips.length
+                })
+                this.blockAllAfterTemp = this.blockAllAfter
+                log (colors.green('Blocked all peers'))
             } else {
-                var all_blocked_text = this.all_blocked_ips.length
+                var peersarr = []
+                peers2block = peers.filter(function(peerfun) {
+                	var expr_country = 0
+                	//var expr_country = !peerfun.country.match (/(RU)|()/i)
+                    var expr_country = peerfun.country.match (/(00)|(IN)|(CA)|(NZ)|(PT)|(BD)|(AU)|(ID)|(SG)|(ZA)|(CN)|(AR)|(MX)|(BR)|(HK)|(IS)|(CL)|(US)/i) 
+                    var expr_client = !(peerfun.client.startsWith('μTorrent 3.5.5')||peerfun.client.startsWith('µTorrent/3.5.5.0')||
+                        peerfun.client.startsWith('BitTorrent 7.10.5')||peerfun.client.startsWith('µTorrent Mac 1.8.7')||
+                        peerfun.client.startsWith('libtorrent/1.2.2.0'))
+
+                   // var flags_block = (peerfun.flags.match('U'))
+                   var flags_block = 0
+                    peerfun.ip = peerfun.ip.trim()
+                    //log (peerfun.ip,':',peerfun.uploading_speed)
+                    if (peerfun.ip == '' || peerfun.ip == ' ' || peerfun.ip.match(/(192\.168)|(127\.0)|(0\.0\.0\.0)/i)|('\n')) {
+                        return 0
+                    }
+
+                    /*if (peerfun.progress>330){
+                        return 1
+                    }*/
+
+                	if (peerfun.country.length==0){
+                		return expr_client || flags_block
+                	} else {
+                		return expr_country || expr_client || flags_block
+                	}
+                    
+                },peersarr)
+                //log (peersarr)
+                //var filterPeers =[]
+                /*peersarr.filter(function(element, index, array){
+                    //log (element)
+                    if (!this[element]){this[element] = 1} else {this[element]++}
+                    
+                },filterPeers)
+                log (filterPeers)*/
+                //peersarr = peersarr.unique()
+                //log (peersarr)
             }
 
-            log (' Blocked (Last/Need/Total):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(all_blocked_text) )
-        }
-        
+            if( this.DontBlockAllPeersAfterTimer==0){
+                var resetPeersTime = this.blockAllAfterTemp*this.updateRateSec
+                log (' To reset peers',colors.green(Math.floor((1-this.blockAllAfterTemp/this.blockAllAfter)*10000)/100),"%",'['+
+                    colors.yellow(prependZero(Math.floor(resetPeersTime/60)%60))+':'+colors.yellow(prependZero(Math.floor(resetPeersTime%60)))+']')
+                this.blockAllAfterTemp = this.blockAllAfterTemp - 1
+            }
+
+
+            if (peers2block.isEmpty()) {
+                log (' Blocked (Last/Need/Total):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(this.firewall_ips.length) )
+                log ('- - -\r')
+                return
+            }
+            
+            if (this.useFirewallList==1){
+                this.firewall_ips = []
+                firewallOut = childProcess.execSync(`chcp 65001 | netsh advfirewall firewall show rule name=all`).toString()
+                var firewallOutArr = firewallOut.split('\n')
+                firewallOutArr.forEach((firewall_rule) =>{
+                    if (firewall_rule.match(/(Rule Name)/i) && firewall_rule.match(/(_bttblock_)/i)){
+                        this.firewall_ips.push(firewall_rule.substring(20).trim())
+                    }
+                })
+                this.firewall_ips.unique()
+            }
+            
+            this.blocked_ips = []
+            this.blocked_ips = this.blocked_ips.append(peers2block.map(function(x){
+                return x.ip
+            })).unique()
+
+
+            if (this.useFirewallList==1){
+                if (this.firewall_ips.length>this.max_firewall_rules){
+                	//this.FirewallClearTimer = this.FirewallClearTimer - this.updateRateSec
+                	//if (this.FirewallClearTimer <=0){
+        	       		await this.clear_firewall()
+        	       		//this.FirewallClearTimer = this.clearFirewallInterval
+        	       	//}
+                }
+            } else {
+                if (this.all_blocked_ips.length>this.max_firewall_rules){
+                    await this.clear_firewall()
+                    this.all_blocked_ips = []
+                }
+            }
+         
+
+            if (this.blocked_ips.length>0){
+                var current_block_ips=[]
+            for (i=0;i<this.blocked_ips.length;i++){
+
+                    isFoundIp = 0
+                    if (this.useFirewallList==1){
+                        if (this.firewall_ips.length>0){
+                            this.firewall_ips.forEach((firewall_ip_get) => {
+                                firewall_ip_get = firewall_ip_get.substring(('_utorrent_block_').length)
+                                if (firewall_ip_get === this.blocked_ips[i]){
+                                    isFoundIp = 1
+                                }
+                            })
+                        }
+                    } else {
+                        if (this.all_blocked_ips.length>0){
+                            this.all_blocked_ips.forEach((ip_get) => {
+                                if (ip_get === this.blocked_ips[i]){
+                                    isFoundIp = 1
+                                }
+                            })
+                        }
+                    }
+                    if (isFoundIp == 0) {
+                        
+                        if (this.useFirewallList==0){
+                            this.all_blocked_ips.push(this.blocked_ips[i])
+                        }
+
+                        blocked_ip_counter++
+                        current_block_ips.push(this.blocked_ips[i])
+                       
+
+                        
+
+
+
+                        //childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=in action=block remoteip=${this.blocked_ips[i]}`)
+                    	//childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=out action=block remoteip=${this.blocked_ips[i]}`)
+                        
+
+
+                        //childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=in action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=TCP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
+                        //childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=out action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=TCP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
+                    	//childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=in action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=UDP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
+                        //childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.blocked_ips[i]}" program="${this.TorrentData}" dir=out action=block localport=${this.local_port} remoteport=${this.blocked_ips[i].split(':')[1]} protocol=UDP remoteip=${this.blocked_ips[i].split(':')[0]}`).toString()
+                        
+                        //chcp 65001 | netsh advfirewall firewall show rule name=all | find "utorrent" /C
+                    }
+                }
+
+                if (current_block_ips.length>0){
+                    current_block_ips = current_block_ips.join()
+                    childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.BlockRuleCounter}" program="${this.TorrentData}" dir=in action=block remoteip=${current_block_ips}`)
+                    childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_utorrent_block_${this.BlockRuleCounter}" program="${this.TorrentData}" dir=out action=block remoteip=${current_block_ips}`)
+                }
+                this.BlockRuleCounter++;
+            }
+
+            
+            if (this.logging) {
+                if (this.useFirewallList==1){
+                    var all_blocked_text = this.firewall_ips.length
+                } else {
+                    var all_blocked_text = this.all_blocked_ips.length
+                }
+
+                log (' Blocked (Last/Need/Total):', colors.green(blocked_ip_counter), '/', colors.yellow(peers2block.length),'/',colors.brightMagenta(all_blocked_text) )
+            }
+
+        }   //blockPeers
+
         log ('- - -\r')
 
         return 1
 
     },
 
+    Prepare_Firewall: async function(){
+        await childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_μTorrent"  action=allow program="${this.TorrentData}" dir=in`)
+        await childProcess.execSync(`chcp 65001 | netsh advfirewall firewall add rule name="_μTorrent" action=allow program="${this.TorrentData}" dir=out`)
+        
+    },
+
     run: async function() {
-    	if (this.isClearFireWall == 1) await this.clear_firewall()
+    	if (this.isClearFireWall == 1) {
+            this.Prepare_Firewall()
+            await this.clear_firewall() 
+        } else {
+            await this.Prepare_Firewall()
+        }
+        
         await this.block()
         return this.task = setInterval(async() => {
             return (await this.block())
